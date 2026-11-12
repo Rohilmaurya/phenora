@@ -556,8 +556,6 @@ const DiseaseNodeComponent = ({ data }: { data: any }) => {
   return (
     <div
       data-node-kind="disease"
-      onMouseEnter={() => data.onHoverStart?.()}
-      onMouseLeave={() => data.onHoverEnd?.()}
       className={`graph-node-inner px-4 py-3 rounded-xl bg-gradient-to-br from-[#0f2e2b] to-[#134e4a] dark:from-[#0c2926] dark:to-[#113d39] text-white min-w-[232px] max-w-[258px] relative cursor-pointer transition-[box-shadow,border-color] duration-150 ${
         isActive
           ? "border-2 border-teal-300 shadow-[0_14px_30px_-8px_rgba(20,184,166,0.45)]"
@@ -765,10 +763,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
   const morphTlRef = useRef<gsap.core.Timeline | null>(null);
   const livePosRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const prevLayoutModeRef = useRef<string>("");
-  const hoverTimerRef = useRef<number | null>(null);
-  const lastMouseMoveMsRef = useRef<number>(0);
-  const hoverEntryPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const latestPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isClampingViewportRef = useRef(false);
   const isProgrammaticViewportRef = useRef(false);
   const programmaticVpTimerRef = useRef<number | null>(null);
@@ -776,8 +770,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
 
   const [isManualStacked, setIsManualStacked] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [isDiseaseHovered, setIsDiseaseHovered] = useState(false);
-  const [isCardHovered, setIsCardHovered] = useState(false);
   const [isCardPinned, setIsCardPinned] = useState(false);
   const [entranceRunKey, setEntranceRunKey] = useState("");
   const [zoomPercent, setZoomPercent] = useState(100);
@@ -809,117 +801,26 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
   const activeDiseaseId =
     selectedCandidate?.disease_id || selectedCandidateId || null;
 
-  const clearHoverTimer = useCallback(() => {
-    if (hoverTimerRef.current !== null) {
-      window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-  }, []);
-
-  const showInspectorCard = Boolean(
-    selectedCandidate && (isCardPinned || isDiseaseHovered || isCardHovered)
-  );
+  const showInspectorCard = Boolean(selectedCandidate && isCardPinned);
   const showInspectorCardRef = useRef(showInspectorCard);
   showInspectorCardRef.current = showInspectorCard;
 
-  const isDiseaseHoveredRef = useRef(isDiseaseHovered);
-  isDiseaseHoveredRef.current = isDiseaseHovered;
-  const isCardHoveredRef = useRef(isCardHovered);
-  isCardHoveredRef.current = isCardHovered;
-  const isCardPinnedRef = useRef(isCardPinned);
-  isCardPinnedRef.current = isCardPinned;
-
-  const handleDiseaseHoverStart = useCallback(() => {
-    clearHoverTimer();
-    hoverEntryPointerRef.current = { ...latestPointerRef.current };
-    setIsDiseaseHovered(true);
-  }, [clearHoverTimer]);
-
-  const scheduleHoverClose = useCallback(
-    (delayMs = 240) => {
-      clearHoverTimer();
-      hoverTimerRef.current = window.setTimeout(() => {
-        if (!isCardHoveredRef.current && !isCardPinnedRef.current) {
-          setIsDiseaseHovered(false);
-        }
-      }, delayMs);
-    },
-    [clearHoverTimer]
-  );
-
-  // Guard against synthetic mouseleave when the disease block slides below the stacked findings under a still cursor
-  const handleDiseaseHoverEnd = useCallback(() => {
-    if (performance.now() - lastMouseMoveMsRef.current > 130) {
-      return;
-    }
-    scheduleHoverClose(360);
-  }, [scheduleHoverClose]);
-
-  const handleCardHoverStart = useCallback(() => {
-    clearHoverTimer();
-    setIsCardHovered(true);
-  }, [clearHoverTimer]);
-
-  const handleCardHoverEnd = useCallback(() => {
-    setIsCardHovered(false);
-    scheduleHoverClose(240);
-  }, [scheduleHoverClose]);
-
-  const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      lastMouseMoveMsRef.current = performance.now();
-      latestPointerRef.current = { x: e.clientX, y: e.clientY };
-
-      if (!isDiseaseHoveredRef.current || isCardHoveredRef.current || isCardPinnedRef.current) {
-        return;
-      }
-
-      const targetEl = e.target as HTMLElement | null;
-      const overDiseaseOrCard = Boolean(
-        targetEl?.closest("[data-node-kind='disease'], [role='dialog']")
-      );
-      if (overDiseaseOrCard) {
-        clearHoverTimer();
-        return;
-      }
-
-      const distMoved = Math.hypot(
-        e.clientX - hoverEntryPointerRef.current.x,
-        e.clientY - hoverEntryPointerRef.current.y
-      );
-      if (distMoved > 26 && hoverTimerRef.current === null) {
-        const movingRight = e.clientX > hoverEntryPointerRef.current.x + 12;
-        scheduleHoverClose(movingRight ? 420 : 220);
-      }
-    },
-    [clearHoverTimer, scheduleHoverClose]
-  );
-
   const handleCanvasMouseLeave = useCallback(() => {
     setHoveredNodeId(null);
-    if (isDiseaseHoveredRef.current && !isCardPinnedRef.current) {
-      scheduleHoverClose(180);
-    }
-  }, [scheduleHoverClose]);
-
-  useEffect(() => {
-    return () => clearHoverTimer();
-  }, [clearHoverTimer]);
+  }, []);
 
   useEffect(() => {
     if (!showInspectorCard) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsCardPinned(false);
-        setIsDiseaseHovered(false);
-        setIsCardHovered(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showInspectorCard]);
 
-  // Reset stack & hover state cleanly when underlying graph dataset changes
+  // Reset stack & inspector state cleanly when underlying graph dataset changes
   useEffect(() => {
     morphTlRef.current?.kill();
     livePosRef.current.clear();
@@ -929,8 +830,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
     setIsManualStacked(false);
     setHoveredNodeId(null);
     setIsCardPinned(false);
-    setIsDiseaseHovered(false);
-    setIsCardHovered(false);
     canvasWrapRef.current?.classList.remove("graph-morphing");
   }, [graph]);
 
@@ -1322,8 +1221,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
           disease_id: diseaseNode.disease_id,
           candidate_rank: diseaseNode.candidate_rank,
           isInspectorOpen: showInspectorCardRef.current,
-          onHoverStart: handleDiseaseHoverStart,
-          onHoverEnd: handleDiseaseHoverEnd,
         },
       });
 
@@ -1493,8 +1390,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
     effectiveStacked,
     shiftDiseaseBelow,
     handleToggleStack,
-    handleDiseaseHoverStart,
-    handleDiseaseHoverEnd,
     setNodes,
     setEdges,
     updateNodeInternals,
@@ -1878,7 +1773,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
       {/* Main Graph Viewport + Floating Summary Card */}
       <div
         ref={canvasWrapRef}
-        onMouseMove={handleCanvasMouseMove}
         onMouseLeave={handleCanvasMouseLeave}
         className="flex-1 w-full min-h-[360px] sm:min-h-[460px] lg:min-h-[540px] rounded-xl border border-[#e5e5e0] dark:border-[#2e2e2a] bg-[#fafaf8] dark:bg-[#111110] overflow-hidden relative"
       >
@@ -1921,8 +1815,6 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
               onNodeClick={handleFlowNodeClick}
               onPaneClick={() => {
                 setIsCardPinned(false);
-                setIsDiseaseHovered(false);
-                setIsCardHovered(false);
               }}
               onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
               onNodeMouseLeave={() => setHoveredNodeId(null)}
@@ -1963,28 +1855,18 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
               >
                 <span className="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0" />
                 <span className="sm:hidden">Tap to inspect</span>
-                <span className="hidden sm:inline">Hover or click disease block to inspect</span>
+                <span className="hidden sm:inline">Click disease block to inspect</span>
               </button>
             )}
 
             {/* Floating Editorial Summary Card on wide canvases (docked cleanly below on narrow widths) */}
             {showInspectorCard && selectedCandidate && canvasSize.width >= 760 && (
               <div className="absolute top-5 right-5 bottom-5 w-[min(392px,calc(100%-2.5rem))] z-30 pointer-events-none flex items-center justify-end">
-                <div
-                  onMouseEnter={handleCardHoverStart}
-                  onMouseLeave={handleCardHoverEnd}
-                  className="pointer-events-auto w-full max-h-full flex flex-col"
-                >
+                <div className="pointer-events-auto w-full max-h-full flex flex-col">
                   <EvidenceInspector
                     selectedCandidate={selectedCandidate}
                     excludedObservations={excludedObservations}
-                    isPinned={isCardPinned}
-                    onTogglePin={() => setIsCardPinned((prev) => !prev)}
-                    onClose={() => {
-                      setIsCardPinned(false);
-                      setIsDiseaseHovered(false);
-                      setIsCardHovered(false);
-                    }}
+                    onClose={() => setIsCardPinned(false)}
                   />
                 </div>
               </div>
@@ -1999,13 +1881,7 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
           <EvidenceInspector
             selectedCandidate={selectedCandidate}
             excludedObservations={excludedObservations}
-            isPinned={isCardPinned}
-            onTogglePin={() => setIsCardPinned((prev) => !prev)}
-            onClose={() => {
-              setIsCardPinned(false);
-              setIsDiseaseHovered(false);
-              setIsCardHovered(false);
-            }}
+            onClose={() => setIsCardPinned(false)}
           />
         </div>
       )}

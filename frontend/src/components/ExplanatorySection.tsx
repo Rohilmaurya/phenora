@@ -184,18 +184,17 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       const stageEl = orbitStageRef.current;
       if (!stageEl) return;
 
-      const stageW = stageEl.clientWidth || Math.min(window.innerWidth || 1200, 1152);
-      const vw = Math.min(window.innerWidth || stageW, stageW);
+      const vw = window.innerWidth || stageEl.clientWidth || 1200;
       const cardEl0 = cardRefs.current[0];
       const cardW = cardEl0 ? cardEl0.offsetWidth : vw < 640 ? 300 : 470;
-      // Wide wheel on desktop, proportional bounded arc on compact viewports so sides never protrude
-      const minOffscreenRadius = vw * 0.54 + cardW * 0.58 + (vw < 640 ? 48 : 80);
+      // Wide invisible wheel on desktop so adjacent cards sweep smoothly across the stage
+      const minOffscreenRadius = vw * 0.56 + cardW * 0.62 + (vw < 640 ? 48 : 90);
       const radius = Math.round(
         vw < 640
           ? Math.max(320, vw * 0.92, minOffscreenRadius)
           : Math.max(460, vw * 0.82, minOffscreenRadius)
       );
-      const arcDrop = Math.min(vw < 640 ? 52 : 92, Math.max(32, radius * 0.065));
+      const arcDrop = Math.min(vw < 640 ? 52 : 92, Math.max(32, radius * 0.075));
 
       WORKFLOW_STEPS.forEach((_, idx) => {
         const cardEl = cardRefs.current[idx];
@@ -294,10 +293,11 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       });
     }, root);
 
-    // Section 2: Orbital Scroll-Driven Workflow Card Stage (pin only when desktop/tablet height accommodates tabs cleanly)
+    // Section 2: Orbital Scroll-Driven Workflow Card Stage
+    // Pin on tablet/desktop (regardless of viewport height); scrub without pinning on mobile
     renderOrbit(currentURef.current);
     const mm = gsap.matchMedia();
-    mm.add("(min-width: 768px) and (min-height: 660px)", () => {
+    mm.add("(min-width: 768px)", () => {
       if (!orbitSectionRef.current) return;
       renderOrbit(currentURef.current);
       orbitTriggerRef.current = ScrollTrigger.create({
@@ -343,15 +343,36 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       };
     });
 
-    mm.add("(max-width: 767px), (max-height: 659px)", () => {
-      orbitTriggerRef.current = null;
+    mm.add("(max-width: 767px)", () => {
+      if (!orbitSectionRef.current) return;
       renderOrbit(currentURef.current);
-      const onResize = () => renderOrbit(currentURef.current);
-      window.addEventListener("resize", onResize);
-      return () => window.removeEventListener("resize", onResize);
+      orbitTriggerRef.current = ScrollTrigger.create({
+        trigger: orbitSectionRef.current,
+        start: "top 68%",
+        end: "bottom 28%",
+        pin: false,
+        invalidateOnRefresh: true,
+        scrub: 0.2,
+        onRefresh: () => renderOrbit(currentURef.current),
+        onUpdate: (self) => {
+          const u = self.progress * (WORKFLOW_STEPS.length - 1);
+          currentURef.current = u;
+          const nearest = Math.round(u);
+          setActiveStage((prev) => (prev !== nearest ? nearest : prev));
+          renderOrbit(u);
+        },
+      });
+      return () => {
+        orbitTriggerRef.current = null;
+      };
+    });
+
+    const refreshRaf = window.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
     });
 
     return () => {
+      window.cancelAnimationFrame(refreshRaf);
       tabTweenRef.current?.kill();
       renderOrbitRef.current = null;
       orbitTriggerRef.current = null;
@@ -486,7 +507,7 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
           <div className="space-y-3">
             <div
               ref={orbitStageRef}
-              className="relative min-h-[348px] sm:min-h-[316px] w-full flex items-center justify-center overflow-hidden py-3 [perspective:1200px]"
+              className="relative min-h-[348px] sm:h-[296px] sm:min-h-[296px] w-full flex items-center justify-center overflow-visible py-3 sm:py-0 [perspective:1200px]"
             >
               {WORKFLOW_STEPS.map((item, idx) => {
                 const isCentered = activeStage === idx;
