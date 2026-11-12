@@ -1,0 +1,21 @@
+{
+  "case_id": "SYN-PED-003",
+  "name": "Exclusion and negation benchmark case",
+  "expected_disease_id": null,
+  "expected_disease_label": "no_candidates",
+  "note_text": "Child presented for routine pediatric assessment. Mother has history of seizures. Father was treated for scoliosis in childhood. Child is actively thriving with no seizures and no developmental delay reported.",
+  "expected_excluded": [
+    {
+      "quote": "seizures",
+      "expected_reason": "family_history_not_scored_in_v1"
+    },
+    {
+      "quote": "seizures",
+      "expected_reason": "negated_not_scored_in_v1"
+    },
+    {
+      "quote": "developmental delay",
+      "expected_reason": "negated_not_scored_in_v1"
+    }
+  ]
+}

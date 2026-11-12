@@ -1,0 +1,10 @@
+{
+  "hpo_annotations_release": "2026-09-02",
+  "hpo_annotations_source": "https://purl.obolibrary.org/obo/hp/hpoa/phenotype.hpoa",
+  "orphadata_release": "2026-06-23",
+  "orphadata_source": "https://www.orphadata.com/data/json/en_product1.json.tar.gz",
+  "who_icd11_source": "https://icd.who.int (via Orphadata WHO ICD-11 alignment & NIH Clinical Tables MMS)",
+  "diseases_count": 7338,
+  "associations_count": 181091,
+  "folded_duplicate_orpha_count": 2239
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "SYN-PED-001",
+  "name": "Infant with fever-induced refractory seizures",
+  "expected_disease_id": "OMIM:607208",
+  "expected_disease_label": "Dravet syndrome",
+  "note_text": "A 9-month-old infant presents to the pediatric neurology clinic following multiple episodes of febrile seizures. Recent events have progressed to prolonged status epilepticus requiring ICU admission. Examination reveals notable gait ataxia and developmental delay. Mother reports no history of seizures in the family.",
+  "expected_mentions": [
+    {
+      "quote": "febrile seizures",
+      "hpo_id": "HP:0002373",
+      "polarity": "present",
+      "experiencer": "patient"
+    },
+    {
+      "quote": "status epilepticus",
+      "hpo_id": "HP:0002133",
+      "polarity": "present",
+      "experiencer": "patient"
+    },
+    {
+      "quote": "ataxia",
+      "hpo_id": "HP:0001251",
+      "polarity": "present",
+      "experiencer": "patient"
+    },
+    {
+      "quote": "developmental delay",
+      "hpo_id": "HP:0001263",
+      "polarity": "present",
+      "experiencer": "patient"
+    }
+  ]
+}

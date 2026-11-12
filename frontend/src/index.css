@@ -1,0 +1,276 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  :root {
+    --bg: #f7f7f5;
+    --ink: #111111;
+    --mute: #8d8d86;
+    --sub: #66665f;
+    --border: #e5e5e0;
+    --border-strong: #cfcfc8;
+    --card: #ffffff;
+    --surface-subtle: #fcfcfb;
+    --surface-muted: #f0f0ec;
+    --surface-canvas: #fafaf8;
+    --accent: #14533c;
+
+    /* Emil Kowalski motion curve tokens */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0c0c0b;
+    --ink: #f3f3ee;
+    --mute: #6d6d67;
+    --sub: #a3a39a;
+    --border: #262622;
+    --border-strong: #3a3a34;
+    --card: #151513;
+    --surface-subtle: #1b1b18;
+    --surface-muted: #22221e;
+    --surface-canvas: #11110f;
+    --accent: #34d399;
+  }
+
+  html {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    overflow-x: hidden;
+    caret-color: var(--ink);
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  ::selection {
+    background-color: var(--ink);
+    color: var(--bg);
+  }
+
+  a,
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+}
+
+.font-editorial {
+  font-family: "Instrument Serif", Georgia, serif;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tactile button & upward hover motion (no horizontal drift) */
+.btn-press {
+  transition:
+    transform 180ms var(--ease-out),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 180ms var(--ease-out);
+}
+
+.btn-press:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover:not(:disabled) {
+    transform: translateY(-2.5px);
+    box-shadow: 0 8px 18px -6px rgba(17, 17, 17, 0.18);
+  }
+  [data-theme="dark"] .hover-lift:hover:not(:disabled) {
+    box-shadow: 0 10px 22px -6px rgba(0, 0, 0, 0.65);
+  }
+}
+
+/* Surface elevation anchored with soft offset blur (craft-floor) */
+.surface-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
+}
+[data-theme="dark"] .surface-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Clean modal emergence without scale(0) */
+@keyframes modalSurfaceIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-enter {
+  animation: modalSurfaceIn 200ms var(--ease-out) both;
+}
+
+/* Lenis smooth scrolling root state */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+/* Custom subtle scrollbars tuned to surface palette */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #d2d2ca;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #adada4;
+}
+
+/* React Flow canvas styling aligned to theme palette */
+.react-flow__background {
+  background-color: var(--surface-canvas) !important;
+}
+.react-flow__controls {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.08) !important;
+}
+.react-flow__controls button {
+  background: var(--card) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--sub) !important;
+  fill: var(--sub) !important;
+}
+.react-flow__controls button:hover {
+  background: var(--surface-muted) !important;
+  color: var(--ink) !important;
+  fill: var(--ink) !important;
+}
+[data-theme="dark"] .react-flow__attribution {
+  background: rgba(21, 21, 19, 0.85) !important;
+  color: #a3a39a !important;
+}
+[data-theme="dark"] .react-flow__attribution a {
+  color: #d4d4cc !important;
+}
+
+/* Smooth animated SVG flow along evidence graph paths */
+@keyframes evidenceEdgeFlow {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.evidence-edge-flow {
+  stroke-dasharray: 5 7;
+  animation: evidenceEdgeFlow 0.95s linear infinite;
+}
+
+.graph-node-inner {
+  will-change: transform, opacity;
+}
+
+.graph-edge-group {
+  transition: opacity 220ms var(--ease-out);
+}
+
+.graph-morphing .edge-photon {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+/* Hover / pinned inspector card entrance with contextual origin (emil-design-eng) */
+@keyframes diseaseHoverCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.disease-hover-card-enter {
+  transform-origin: center right;
+  animation: diseaseHoverCardIn 210ms var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-press,
+  .hover-lift,
+  .modal-enter,
+  .disease-hover-card-enter {
+    animation-duration: 0.01ms !important;
+    transition-duration: 120ms !important;
+    transform: none !important;
+  }
+  .evidence-edge-flow {
+    animation: none !important;
+  }
+}
+
+/* Paint splash Light <-> Dark View Transition (vector clipPath animated in rAF) */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+html.theme-painting::view-transition-new(root) {
+  clip-path: url(#phenora-paint-clip);
+  z-index: 2;
+}
+
+html.theme-painting,
+html.theme-painting * {
+  transition: none !important;
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": "phenora-data-v1",
+  "pack_id": "phenora-who-icd11-v1",
+  "created_at": "2026-11-12",
+  "ontology": {
+    "release": "2026-09-01",
+    "sha256": "60035e1cf6e7bb72f2c7ebc689f83da0bf2a74b6d7c8c610fbe41c5cd0d8616d",
+    "source": "https://hpo.jax.org",
+    "license": "CC-BY-4.0"
+  },
+  "annotations": {
+    "release": "2026-09-02",
+    "sha256": "72bac14f014948e81ff9132c39c13e52dfee073ab9d77445342707bfec2c88a2",
+    "source": "https://icd.who.int",
+    "license": "CC-BY-4.0"
+  },
+  "selection": {
+    "scope": "curated_subset",
+    "method": "Hybrid WHO ICD-11 + Orphadata rare-disease cross-references paired with official HPO disease-phenotype annotations",
+    "selection_version": "who-icd11-orphadata-hpo-v1"
+  },
+  "counts": {
+    "hpo_terms": 19894,
+    "diseases": 7338,
+    "associations": 181091
+  },
+  "files": [
+    {
+      "role": "ontology",
+      "path": "ontology_provenance.json",
+      "sha256": "60035e1cf6e7bb72f2c7ebc689f83da0bf2a74b6d7c8c610fbe41c5cd0d8616d",
+      "size_bytes": 154,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "role": "annotations",
+      "path": "who_hybrid_annotations_provenance.json",
+      "sha256": "72bac14f014948e81ff9132c39c13e52dfee073ab9d77445342707bfec2c88a2",
+      "size_bytes": 468,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "role": "term_index",
+      "path": "phenora_data.db",
+      "sha256": "5d3a094fb9988c71379662f866fa412c078629ed26c48f4d2c9b4b647cf31608",
+      "size_bytes": 60932096,
+      "license": "CC-BY-4.0"
+    }
+  ]
+}

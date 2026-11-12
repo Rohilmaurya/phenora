@@ -1,0 +1,50 @@
+{
+  "schema_version": "phenora-data-v1",
+  "pack_id": "phenora-data-v1",
+  "created_at": "2026-11-09",
+  "ontology": {
+    "release": "2026-02-01",
+    "sha256": "62bdcc360e7d9c6c73dc1dc9ec712df0a1f8a4d0ccd5e004e07d0c9c541c8340",
+    "source": "https://hpo.jax.org",
+    "license": "CC-BY-4.0"
+  },
+  "annotations": {
+    "release": "2026-02-15",
+    "sha256": "ed0cd982378025568877575b795c35d77d4723e51069245b2400706488304803",
+    "source": "https://hpo.jax.org/app/data/annotations",
+    "license": "CC-BY-4.0"
+  },
+  "selection": {
+    "scope": "curated_subset",
+    "method": "Curated pediatric core rare-disease phenotype cohort",
+    "selection_version": "pediatric-core-v1"
+  },
+  "counts": {
+    "hpo_terms": 83,
+    "diseases": 12,
+    "associations": 83
+  },
+  "files": [
+    {
+      "role": "ontology",
+      "path": "ontology_seed.json",
+      "sha256": "62bdcc360e7d9c6c73dc1dc9ec712df0a1f8a4d0ccd5e004e07d0c9c541c8340",
+      "size_bytes": 14172,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "role": "annotations",
+      "path": "annotations_seed.json",
+      "sha256": "ed0cd982378025568877575b795c35d77d4723e51069245b2400706488304803",
+      "size_bytes": 12312,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "role": "term_index",
+      "path": "phenora_data.db",
+      "sha256": "99185499af7141db35c900040d852c28406e8fd5cbcba46923d0410e7ff4ef15",
+      "size_bytes": 143360,
+      "license": "CC-BY-4.0"
+    }
+  ]
+}

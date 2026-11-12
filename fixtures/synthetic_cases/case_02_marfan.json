@@ -1,0 +1,29 @@
+{
+  "case_id": "SYN-PED-002",
+  "name": "Adolescent with tall stature and joint laxity",
+  "expected_disease_id": "OMIM:154700",
+  "expected_disease_label": "Marfan syndrome",
+  "note_text": "A 14-year-old boy evaluated for chest deformity. Physical exam demonstrates distinct arachnodactyly with elongated digits, marked pectus excavatum, and joint hypermobility. Ophthalmologic examination reveals bilateral ectopia lentis. Transthoracic echocardiogram showed aortic root aneurysm.",
+  "expected_mentions": [
+    {
+      "quote": "arachnodactyly",
+      "hpo_id": "HP:0001166",
+      "polarity": "present"
+    },
+    {
+      "quote": "pectus excavatum",
+      "hpo_id": "HP:0000767",
+      "polarity": "present"
+    },
+    {
+      "quote": "ectopia lentis",
+      "hpo_id": "HP:0001083",
+      "polarity": "present"
+    },
+    {
+      "quote": "aortic root aneurysm",
+      "hpo_id": "HP:0002616",
+      "polarity": "present"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+# Dependencies & build outputs
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Python caches & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Raw downloaded data caches (rebuilt offline by backend/data_import/import_who_hybrid.py)
+data/raw_sources/
+
+# Environment & secrets
+.env
+.env.*
+*.local
+
+# Logs & OS/editor artifacts
+logs/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.sw?
+
+# Session scratch & debug captures
+.court/
+step3_*.png
+reverted_hands_*.png
+kindred.html
+editorial_deck.html

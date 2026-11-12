@@ -1,0 +1,26 @@
+{
+  "schema_version": "phenora-model-v1",
+  "pack_id": "phenora-model-v1",
+  "runtime": "ollama",
+  "model_id": "llama3.2:3b-instruct-q4_K_M",
+  "model_version": "3.2.0",
+  "weights_sha256": "64112461eada7df35ead467a6f3ec76e8ee090ea9483fc99f52e345ec9122abf",
+  "extraction_schema_version": "phenotype-extraction-v1",
+  "languages": [
+    "en"
+  ],
+  "limits": {
+    "max_input_chars": 50000,
+    "timeout_seconds": 30,
+    "minimum_ram_gb": 8.0
+  },
+  "files": [
+    {
+      "role": "model_weights",
+      "path": "model_config.json",
+      "sha256": "64112461eada7df35ead467a6f3ec76e8ee090ea9483fc99f52e345ec9122abf",
+      "size_bytes": 273,
+      "license": "Meta-Llama-3.2-Community"
+    }
+  ]
+}

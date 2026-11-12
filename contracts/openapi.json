@@ -1,0 +1,492 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Phenora Local Phenotype Evidence API",
+    "version": "1.0.0",
+    "description": "Deployment-shaped local API. The hackathon profile uses synthetic cases, a compact pinned model, and a curated pinned HPO data pack. It extracts source-grounded phenotype mentions for human review, then ranks evidence matches. It does not return diagnoses or probabilities. Real-record use requires site authorization and separate clinical/regulatory validation."
+  },
+  "servers": [
+    {
+      "url": "http://{backend_host}:8000",
+      "description": "Local development only. Override backend_host for an isolated test network; configure TLS for runtime.",
+      "variables": {
+        "backend_host": {
+          "default": "127.0.0.1",
+          "description": "Backend address reachable only within the approved network."
+        }
+      }
+    },
+    {
+      "url": "https://{backend_host}:8443",
+      "description": "Runtime profile with TLS certificates issued by the trusted local certificate authority.",
+      "variables": {
+        "backend_host": {
+          "default": "phenora-backend.local",
+          "description": "Backend address reachable only within the approved network."
+        }
+      }
+    }
+  ],
+  "security": [{"LocalBearerAuth": []}],
+  "tags": [
+    {"name": "system"},
+    {"name": "ingestion"},
+    {"name": "phenotypes"},
+    {"name": "matching"}
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": ["system"],
+        "operationId": "getHealth",
+        "summary": "Return readiness and pinned data releases",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Backend is ready or in a degraded state that still permits manual matching.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          },
+          "503": {
+            "description": "Required local data is unavailable or invalid; matching is blocked.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+          }
+        }
+      }
+    },
+    "/v1/documents/extract-text": {
+      "post": {
+        "tags": ["ingestion"],
+        "operationId": "extractDocumentText",
+        "summary": "Extract text from uploaded clinical documents via in-memory parser or local OCR",
+        "description": "Upload a clinical document (PDF, PNG, JPEG, TIFF) to extract clinical note text in volatile RAM. Air-gapped and zero-persistence: file bytes are parsed in memory and never written to disk or persistent logs. Extracted text is returned for clinician review before NER extraction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Clinical document file (PDF, PNG, JPEG, TIFF) up to 25MB."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document text extracted in memory.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentExtractResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/Unavailable"}
+        }
+      }
+    },
+    "/v1/terms/search": {
+      "post": {
+        "tags": ["phenotypes"],
+        "operationId": "searchHpoTerms",
+        "summary": "Search the local HPO labels and synonyms for manual entry",
+        "description": "Search text is sent in a request body to avoid placing phenotype terms in URLs. Request-body logging is disabled.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TermSearchRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Local search results. An empty list is valid.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TermSearchResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/Unavailable"}
+        }
+      }
+    },
+    "/v1/extractions": {
+      "post": {
+        "tags": ["phenotypes"],
+        "operationId": "extractPhenotypes",
+        "summary": "Extract source-grounded phenotype mentions for human review",
+        "description": "The local model may propose mentions and context only. Disease names, disease ranks, probabilities, and diagnoses are not accepted outputs. Raw note text is processed in memory and must not be persisted or logged.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExtractionRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Extraction completed. Returned terms are suggestions and require review.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExtractionResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"},
+          "503": {"$ref": "#/components/responses/Unavailable"}
+        }
+      }
+    },
+    "/v1/matches": {
+      "post": {
+        "tags": ["matching"],
+        "operationId": "rankPhenotypeEvidence",
+        "summary": "Rank curated disease-phenotype evidence for reviewed observations",
+        "description": "Accepts only reviewed HPO observations, never raw case text. Only confirmed positive observations about the patient contribute to v1 ranking. Negated, uncertain, unknown-experiencer, and family-history observations are returned as excluded context. The response contains ordinal ranks and evidence, not probabilities.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MatchRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked candidates or an explicit no-candidates result.",
+            "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MatchResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/Unavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "headers": {
+      "NoStore": {
+        "description": "Prevents HTTP caches from retaining case-related responses.",
+        "schema": {"type": "string", "const": "no-store"}
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "No valid local identity token was supplied.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Forbidden": {
+        "description": "Authenticated principal lacks permission for this operation.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "PayloadTooLarge": {
+        "description": "Request exceeds the configured note size limit.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "ValidationError": {
+        "description": "Request failed schema or semantic validation. The response must not echo note text.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Unavailable": {
+        "description": "Local model or required versioned data is unavailable. No remote fallback is attempted.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "TooManyRequests": {
+        "description": "Local service capacity limit reached; retry after the indicated delay.",
+        "headers": {
+          "Cache-Control": {"$ref": "#/components/headers/NoStore"},
+          "Retry-After": {"description": "Minimum delay before retry, in seconds.", "schema": {"type": "integer", "minimum": 1}}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "GatewayTimeout": {
+        "description": "Local model did not complete within the configured timeout; no remote fallback is attempted.",
+        "headers": {"Cache-Control": {"$ref": "#/components/headers/NoStore"}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      }
+    },
+    "securitySchemes": {
+      "LocalBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT issued by the approved identity provider reachable inside the isolated network. No public identity service is contacted."
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "code", "message"],
+        "properties": {
+          "request_id": {"type": "string", "format": "uuid"},
+          "code": {"type": "string", "enum": ["unauthenticated", "forbidden", "invalid_request", "payload_too_large", "model_unavailable", "model_timeout", "data_unavailable", "rate_limited", "internal_error"]},
+          "message": {"type": "string", "maxLength": 240}
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "api_version", "extractor_status", "ontology_release", "annotation_release", "data_pack_id", "model_pack_id", "model_id", "model_version"],
+        "properties": {
+          "status": {"type": "string", "enum": ["ready", "degraded", "unavailable"]},
+          "api_version": {"type": "string", "const": "v1"},
+          "extractor_status": {"type": "string", "enum": ["ready", "disabled", "unavailable"]},
+          "ontology_release": {"type": ["string", "null"], "maxLength": 40},
+          "annotation_release": {"type": ["string", "null"], "maxLength": 40},
+          "data_pack_id": {"type": ["string", "null"], "maxLength": 100},
+          "model_pack_id": {"type": ["string", "null"], "maxLength": 100},
+          "model_id": {"type": ["string", "null"], "maxLength": 120},
+          "model_version": {"type": ["string", "null"], "maxLength": 80}
+        }
+      },
+      "ExtractionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["note_text"],
+        "properties": {
+          "note_text": {"type": "string", "minLength": 1, "maxLength": 50000},
+          "language": {"type": "string", "default": "en", "maxLength": 35}
+        }
+      },
+      "ExtractionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "model", "ontology_release", "mentions"],
+        "properties": {
+          "request_id": {"type": "string", "format": "uuid"},
+          "model": {"$ref": "#/components/schemas/ModelProvenance"},
+          "ontology_release": {"type": "string", "maxLength": 40},
+          "mentions": {"type": "array", "maxItems": 500, "items": {"$ref": "#/components/schemas/PhenotypeMention"}}
+        }
+      },
+      "ModelProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["runtime", "model_id", "model_version", "sha256"],
+        "properties": {
+          "runtime": {"type": "string", "enum": ["ollama", "lm_studio"]},
+          "model_id": {"type": "string", "maxLength": 120},
+          "model_version": {"type": "string", "maxLength": 80},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      },
+      "PhenotypeMention": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mention_id", "source_span", "raw_term", "polarity", "temporality", "experiencer", "onset_age_group", "resolver_status", "hpo_candidates"],
+        "properties": {
+          "mention_id": {"type": "string", "format": "uuid"},
+          "source_span": {"$ref": "#/components/schemas/SourceSpan"},
+          "raw_term": {"type": "string", "minLength": 1, "maxLength": 200},
+          "polarity": {"type": "string", "enum": ["present", "negated", "uncertain"]},
+          "temporality": {"type": "string", "enum": ["current", "historical", "onset", "unknown"]},
+          "experiencer": {"type": "string", "enum": ["patient", "family_member", "unknown"]},
+          "onset_age_group": {"type": "string", "description": "Coarse age at first reported onset; not used in v1 ranking. Do not infer from current age.", "enum": ["prenatal", "congenital", "neonatal_0_28_days", "infancy_29_days_to_1_year", "early_childhood_1_to_5_years", "later_childhood_6_to_11_years", "adolescence_12_to_17_years", "unknown"]},
+          "resolver_status": {"type": "string", "enum": ["exact", "synonym", "ambiguous", "unmapped"]},
+          "hpo_candidates": {"type": "array", "maxItems": 5, "items": {"$ref": "#/components/schemas/HpoTerm"}}
+        }
+      },
+      "SourceSpan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "offset_unit", "quote"],
+        "properties": {
+          "start": {"type": "integer", "minimum": 0},
+          "end": {"type": "integer", "minimum": 1},
+          "offset_unit": {"type": "string", "const": "unicode_code_points"},
+          "quote": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      },
+      "HpoTerm": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hpo_id", "label", "match_kind"],
+        "properties": {
+          "hpo_id": {"type": "string", "pattern": "^HP:[0-9]{7}$"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 200},
+          "match_kind": {"type": "string", "enum": ["exact_label", "synonym", "lexical"]}
+        }
+      },
+      "TermSearchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ontology_release", "results"],
+        "properties": {
+          "ontology_release": {"type": "string", "maxLength": 40},
+          "results": {"type": "array", "maxItems": 20, "items": {"$ref": "#/components/schemas/HpoTerm"}}
+        }
+      },
+      "TermSearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["query"],
+        "properties": {
+          "query": {"type": "string", "minLength": 2, "maxLength": 120},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10}
+        }
+      },
+      "MatchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observations"],
+        "properties": {
+          "observations": {"type": "array", "minItems": 1, "maxItems": 300, "items": {"$ref": "#/components/schemas/ReviewedObservation"}},
+          "candidate_limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}
+        }
+      },
+      "ReviewedObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observation_id", "hpo_id", "polarity", "temporality", "experiencer", "onset_age_group", "review_status"],
+        "properties": {
+          "observation_id": {"type": "string", "format": "uuid"},
+          "hpo_id": {"type": "string", "pattern": "^HP:[0-9]{7}$"},
+          "polarity": {"type": "string", "enum": ["present", "negated", "uncertain"]},
+          "temporality": {"type": "string", "enum": ["current", "historical", "onset", "unknown"]},
+          "experiencer": {"type": "string", "enum": ["patient", "family_member", "unknown"]},
+          "onset_age_group": {"type": "string", "description": "Coarse age at first reported onset; the v1 matcher returns this as context but does not score it.", "enum": ["prenatal", "congenital", "neonatal_0_28_days", "infancy_29_days_to_1_year", "early_childhood_1_to_5_years", "later_childhood_6_to_11_years", "adolescence_12_to_17_years", "unknown"]},
+          "review_status": {"type": "string", "enum": ["confirmed", "corrected", "manual"]},
+          "source_mention_ids": {"type": "array", "maxItems": 20, "items": {"type": "string", "format": "uuid"}}
+        }
+      },
+      "MatchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "status", "ranking_method", "data_version", "candidates", "excluded_observations", "unmatched_observation_ids", "graph"],
+        "properties": {
+          "request_id": {"type": "string", "format": "uuid"},
+          "status": {"type": "string", "enum": ["ranked", "no_candidates"]},
+          "ranking_method": {"type": "string", "const": "hpo_semantic_coverage_v1"},
+          "data_version": {"$ref": "#/components/schemas/DataVersion"},
+          "candidates": {"type": "array", "maxItems": 50, "items": {"$ref": "#/components/schemas/Candidate"}},
+          "excluded_observations": {"type": "array", "items": {"$ref": "#/components/schemas/ExcludedObservation"}},
+          "unmatched_observation_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}},
+          "graph": {"$ref": "#/components/schemas/EvidenceGraph"},
+          "notice": {"type": "string", "const": "Research prototype. Ranked phenotype evidence is not a diagnosis or a probability."}
+        }
+      },
+      "EvidenceGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodes", "edges"],
+        "description": "Graph-ready subset containing only the returned candidate and evidence relationships. Empty arrays are returned when there are no candidates.",
+        "properties": {
+          "nodes": {"type": "array", "maxItems": 500, "items": {"$ref": "#/components/schemas/EvidenceGraphNode"}},
+          "edges": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/components/schemas/EvidenceGraphEdge"}}
+        }
+      },
+      "EvidenceGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "label", "hpo_id", "disease_id", "candidate_rank"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 160, "description": "Stable graph key. Use hpo:<HPO_ID> for phenotype nodes and disease:<database-id> for condition nodes."},
+          "type": {"type": "string", "enum": ["phenotype", "disease"]},
+          "label": {"type": "string", "minLength": 1, "maxLength": 240},
+          "hpo_id": {"type": ["string", "null"], "pattern": "^HP:[0-9]{7}$"},
+          "disease_id": {"type": ["string", "null"], "maxLength": 120},
+          "candidate_rank": {"type": ["integer", "null"], "minimum": 1}
+        }
+      },
+      "EvidenceGraphEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "target", "relation", "observation_id", "annotation_hpo_id", "annotation_reference"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 240},
+          "source": {"type": "string", "minLength": 1, "maxLength": 160, "description": "Phenotype graph node ID."},
+          "target": {"type": "string", "minLength": 1, "maxLength": 160, "description": "Candidate disease graph node ID."},
+          "relation": {"type": "string", "const": "supports_candidate"},
+          "observation_id": {"type": "string", "format": "uuid"},
+          "annotation_hpo_id": {"type": "string", "pattern": "^HP:[0-9]{7}$"},
+          "annotation_reference": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      },
+      "DataVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ontology_release", "annotation_release", "manifest_sha256"],
+        "properties": {
+          "ontology_release": {"type": "string", "maxLength": 40},
+          "annotation_release": {"type": "string", "maxLength": 40},
+          "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      },
+      "Candidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["disease_id", "disease_label", "rank", "supporting_observations"],
+        "properties": {
+          "disease_id": {"type": "string", "minLength": 1, "maxLength": 120},
+          "disease_label": {"type": "string", "minLength": 1, "maxLength": 240},
+          "rank": {"type": "integer", "minimum": 1},
+          "supporting_observations": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/SupportingEvidence"}}
+        }
+      },
+      "SupportingEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observation_id", "case_hpo_id", "annotation_hpo_id", "relation", "shared_ancestor_ids", "ontology_paths", "annotation"],
+        "properties": {
+          "observation_id": {"type": "string", "format": "uuid"},
+          "case_hpo_id": {"type": "string", "pattern": "^HP:[0-9]{7}$"},
+          "annotation_hpo_id": {"type": "string", "pattern": "^HP:[0-9]{7}$"},
+          "relation": {"type": "string", "enum": ["exact", "annotation_ancestor", "case_term_ancestor", "shared_ancestor"]},
+          "shared_ancestor_ids": {"type": "array", "items": {"type": "string", "pattern": "^HP:[0-9]{7}$"}},
+          "ontology_paths": {
+            "type": "array",
+            "maxItems": 2,
+            "description": "Ordered HPO ID paths. For an ancestor match, one path connects the observed term and annotation term. For a shared-ancestor match, paths run from each term to the reported common ancestor.",
+            "items": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^HP:[0-9]{7}$"}}
+          },
+          "annotation": {"$ref": "#/components/schemas/AnnotationProvenance"}
+        }
+      },
+      "AnnotationProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "reference"],
+        "properties": {
+          "source": {"type": "string", "minLength": 1, "maxLength": 100},
+          "reference": {"type": "string", "minLength": 1, "maxLength": 300},
+          "evidence_code": {"type": ["string", "null"], "maxLength": 80},
+          "frequency": {"type": ["string", "null"], "maxLength": 40}
+        }
+      },
+      "ExcludedObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observation_id", "reason"],
+        "properties": {
+          "observation_id": {"type": "string", "format": "uuid"},
+          "reason": {"type": "string", "enum": ["negated_not_scored_in_v1", "uncertain_not_scored_in_v1", "family_history_not_scored_in_v1", "unknown_experiencer_not_scored_in_v1", "historical_not_scored_in_v1"]}
+        }
+      },
+      "DocumentExtractResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["extracted_text", "detected_mime_type", "page_count", "extraction_method", "warnings"],
+        "properties": {
+          "extracted_text": {"type": "string"},
+          "detected_mime_type": {"type": "string"},
+          "page_count": {"type": "integer", "minimum": 1},
+          "extraction_method": {"type": "string", "enum": ["native_pdf_stream", "local_ocr"]},
+          "warnings": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

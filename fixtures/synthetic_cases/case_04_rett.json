@@ -1,0 +1,29 @@
+{
+  "case_id": "SYN-PED-004",
+  "name": "Toddler girl with regression and stereotypies",
+  "expected_disease_id": "OMIM:312750",
+  "expected_disease_label": "Rett syndrome",
+  "note_text": "A 22-month-old female with progressive developmental regression. Parents noted loss of purposeful hand movements and emergence of continuous midline hand stereotypy (repetitive hand wringing). Patient has developed microcephaly and absent speech.",
+  "expected_mentions": [
+    {
+      "quote": "developmental regression",
+      "hpo_id": "HP:0002376",
+      "polarity": "present"
+    },
+    {
+      "quote": "hand stereotypy",
+      "hpo_id": "HP:0002355",
+      "polarity": "present"
+    },
+    {
+      "quote": "microcephaly",
+      "hpo_id": "HP:0000252",
+      "polarity": "present"
+    },
+    {
+      "quote": "absent speech",
+      "hpo_id": "HP:0001344",
+      "polarity": "present"
+    }
+  ]
+}

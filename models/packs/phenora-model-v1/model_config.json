@@ -1,0 +1,9 @@
+{
+  "name": "llama3.2:3b-instruct-q4_K_M",
+  "runtime": "ollama",
+  "quantization": "Q4_K_M",
+  "context_length": 8192,
+  "system_prompt_version": "phenotype-ner-v1",
+  "parameters": "3.21B",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
