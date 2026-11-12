@@ -132,6 +132,9 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
   const orbitStageRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const orbitTriggerRef = useRef<ScrollTrigger | null>(null);
+  const currentURef = useRef(0);
+  const renderOrbitRef = useRef<((u: number) => void) | null>(null);
+  const tabTweenRef = useRef<gsap.core.Tween | null>(null);
 
   const [activeStage, setActiveStage] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(() => prefersReducedMotion());
@@ -145,29 +148,54 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
 
   const scrollToStage = useCallback((stageIndex: number) => {
     const st = orbitTriggerRef.current;
-    if (!st) return;
-    const progress = stageIndex / (WORKFLOW_STEPS.length - 1);
-    const targetY = st.start + (st.end - st.start) * progress;
-    window.scrollTo({ top: targetY, behavior: "smooth" });
+    if (st) {
+      const progress = stageIndex / (WORKFLOW_STEPS.length - 1);
+      const targetY = st.start + (st.end - st.start) * progress;
+      window.scrollTo({ top: targetY, behavior: "smooth" });
+      return;
+    }
+
+    setActiveStage(stageIndex);
+    const render = renderOrbitRef.current;
+    if (!render) return;
+
+    tabTweenRef.current?.kill();
+    const proxy = { u: currentURef.current };
+    tabTweenRef.current = gsap.to(proxy, {
+      u: stageIndex,
+      duration: 0.42,
+      ease: "power2.out",
+      onUpdate: () => {
+        currentURef.current = proxy.u;
+        render(proxy.u);
+      },
+      onComplete: () => {
+        currentURef.current = stageIndex;
+        render(stageIndex);
+      },
+    });
   }, []);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root || reducedMotion) return;
 
-    let currentU = 0;
-
     const renderOrbit = (u: number) => {
       const stageEl = orbitStageRef.current;
       if (!stageEl) return;
 
-      const vw = window.innerWidth || stageEl.clientWidth || 1200;
+      const stageW = stageEl.clientWidth || Math.min(window.innerWidth || 1200, 1152);
+      const vw = Math.min(window.innerWidth || stageW, stageW);
       const cardEl0 = cardRefs.current[0];
-      const cardW = cardEl0 ? cardEl0.offsetWidth : vw < 640 ? 310 : 470;
-      // Wide invisible wheel so exiting/incoming cards clear the screen cleanly along the arc
-      const minOffscreenRadius = vw * 0.56 + cardW * 0.62 + 90;
-      const radius = Math.round(Math.max(460, vw * 0.82, minOffscreenRadius));
-      const arcDrop = Math.min(92, Math.max(46, radius * 0.075));
+      const cardW = cardEl0 ? cardEl0.offsetWidth : vw < 640 ? 300 : 470;
+      // Wide wheel on desktop, proportional bounded arc on compact viewports so sides never protrude
+      const minOffscreenRadius = vw * 0.54 + cardW * 0.58 + (vw < 640 ? 48 : 80);
+      const radius = Math.round(
+        vw < 640
+          ? Math.max(320, vw * 0.92, minOffscreenRadius)
+          : Math.max(460, vw * 0.82, minOffscreenRadius)
+      );
+      const arcDrop = Math.min(vw < 640 ? 52 : 92, Math.max(32, radius * 0.065));
 
       WORKFLOW_STEPS.forEach((_, idx) => {
         const cardEl = cardRefs.current[idx];
@@ -204,6 +232,8 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       });
     };
 
+    renderOrbitRef.current = renderOrbit;
+
     const ctx = gsap.context(() => {
       // Section 1: scrubbed progress rail + scroll-linked metric focus rows
       if (whySectionRef.current && whyRailRef.current) {
@@ -228,7 +258,7 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       benchRows.forEach((row) => {
         gsap.fromTo(
           row,
-          { opacity: 0.28, x: 24 },
+          { opacity: 0.28, x: 12 },
           {
             opacity: 1,
             x: 0,
@@ -262,58 +292,76 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
           }
         );
       });
-
-      // Section 2: Orbital Scroll-Driven Workflow Card Stage
-      if (orbitSectionRef.current) {
-        renderOrbit(0);
-        orbitTriggerRef.current = ScrollTrigger.create({
-          trigger: orbitSectionRef.current,
-          start: () => {
-            const secEl = orbitSectionRef.current;
-            const stageEl = orbitStageRef.current;
-            if (!secEl || !stageEl) return "top 72px";
-            const secRect = secEl.getBoundingClientRect();
-            const stageRect = stageEl.getBoundingClientRect();
-            const stageCenterOffset =
-              stageRect.top - secRect.top + stageRect.height / 2;
-            const idealTop = Math.round(window.innerHeight / 2 - stageCenterOffset);
-            // Guarantee heading, centered card, and stage name tabs fit inside the viewport together
-            const maxTopToFit = Math.max(
-              16,
-              Math.floor(window.innerHeight - secRect.height - 20)
-            );
-            const minTopBelowNavbar = Math.min(72, maxTopToFit);
-            const targetSecTop = Math.max(
-              minTopBelowNavbar,
-              Math.min(idealTop, maxTopToFit)
-            );
-            return `top ${targetSecTop}px`;
-          },
-          end: "+=1350",
-          pin: true,
-          pinSpacing: true,
-          anticipatePin: 1,
-          invalidateOnRefresh: true,
-          scrub: 0.14,
-          onRefresh: () => renderOrbit(currentU),
-          onUpdate: (self) => {
-            currentU = self.progress * (WORKFLOW_STEPS.length - 1);
-            const nearest = Math.round(currentU);
-            setActiveStage((prev) => (prev !== nearest ? nearest : prev));
-            renderOrbit(currentU);
-          },
-        });
-      }
     }, root);
 
-    return () => {
+    // Section 2: Orbital Scroll-Driven Workflow Card Stage (pin only when desktop/tablet height accommodates tabs cleanly)
+    renderOrbit(currentURef.current);
+    const mm = gsap.matchMedia();
+    mm.add("(min-width: 768px) and (min-height: 660px)", () => {
+      if (!orbitSectionRef.current) return;
+      renderOrbit(currentURef.current);
+      orbitTriggerRef.current = ScrollTrigger.create({
+        trigger: orbitSectionRef.current,
+        start: () => {
+          const secEl = orbitSectionRef.current;
+          const stageEl = orbitStageRef.current;
+          if (!secEl || !stageEl) return "top 72px";
+          const secRect = secEl.getBoundingClientRect();
+          const stageRect = stageEl.getBoundingClientRect();
+          const stageCenterOffset =
+            stageRect.top - secRect.top + stageRect.height / 2;
+          const idealTop = Math.round(window.innerHeight / 2 - stageCenterOffset);
+          // Guarantee heading, centered card, and stage name tabs fit inside the viewport together
+          const maxTopToFit = Math.max(
+            16,
+            Math.floor(window.innerHeight - secRect.height - 20)
+          );
+          const minTopBelowNavbar = Math.min(72, maxTopToFit);
+          const targetSecTop = Math.max(
+            minTopBelowNavbar,
+            Math.min(idealTop, maxTopToFit)
+          );
+          return `top ${targetSecTop}px`;
+        },
+        end: "+=1350",
+        pin: true,
+        pinSpacing: true,
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        scrub: 0.14,
+        onRefresh: () => renderOrbit(currentURef.current),
+        onUpdate: (self) => {
+          const u = self.progress * (WORKFLOW_STEPS.length - 1);
+          currentURef.current = u;
+          const nearest = Math.round(u);
+          setActiveStage((prev) => (prev !== nearest ? nearest : prev));
+          renderOrbit(u);
+        },
+      });
+      return () => {
+        orbitTriggerRef.current = null;
+      };
+    });
+
+    mm.add("(max-width: 767px), (max-height: 659px)", () => {
       orbitTriggerRef.current = null;
+      renderOrbit(currentURef.current);
+      const onResize = () => renderOrbit(currentURef.current);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    });
+
+    return () => {
+      tabTweenRef.current?.kill();
+      renderOrbitRef.current = null;
+      orbitTriggerRef.current = null;
+      mm.revert();
       ctx.revert();
     };
   }, [reducedMotion]);
 
   return (
-    <div ref={rootRef} className="w-full max-w-6xl mx-auto px-6 py-20 space-y-24 overflow-x-clip">
+    <div ref={rootRef} className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-20 space-y-16 sm:space-y-24 overflow-x-clip">
       {/* SECTION 1: THE DIAGNOSTIC GAP (Scroll-scrubbed depth & rail) */}
       <section
         id="why-phenora"
@@ -438,7 +486,7 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
           <div className="space-y-3">
             <div
               ref={orbitStageRef}
-              className="relative h-[272px] sm:h-[296px] w-full flex items-center justify-center overflow-visible [perspective:1200px]"
+              className="relative min-h-[348px] sm:min-h-[316px] w-full flex items-center justify-center overflow-hidden py-3 [perspective:1200px]"
             >
               {WORKFLOW_STEPS.map((item, idx) => {
                 const isCentered = activeStage === idx;
@@ -449,14 +497,14 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
                       cardRefs.current[idx] = el;
                     }}
                     data-orbit-card={item.step}
-                    className={`surface-card overflow-hidden absolute w-[min(470px,calc(100%-2rem))] flex flex-col justify-between will-change-transform transition-[box-shadow,border-color] duration-200 ${
+                    className={`surface-card overflow-hidden absolute w-[min(470px,calc(100%-1.5rem))] flex flex-col justify-between will-change-transform transition-[box-shadow,border-color] duration-200 ${
                       isCentered
                         ? "border-teal-600/35 dark:border-teal-400/35 shadow-[0_24px_56px_-18px_rgba(13,148,136,0.22)] dark:shadow-[0_24px_60px_-16px_rgba(0,0,0,0.8)]"
                         : "shadow-md"
                     }`}
                   >
                     <div className={`h-1.5 w-full bg-gradient-to-r ${item.accentBar}`} />
-                    <div className="p-5 sm:p-6 flex flex-col justify-between gap-3.5 flex-1">
+                    <div className="p-4 sm:p-6 flex flex-col justify-between gap-3 sm:gap-3.5 flex-1">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-[11px] font-mono tabular-nums">
                           <span className={`px-2 py-0.5 rounded border font-semibold ${item.badgeClass}`}>
@@ -519,7 +567,7 @@ export const ExplanatorySection: React.FC<ExplanatorySectionProps> = ({
       <section
         id="clinician-safety"
         data-scroll-block
-        className="scroll-mt-24 bg-gradient-to-br from-teal-50/80 via-[#f2f5f3] to-blue-50/75 dark:from-teal-950/35 dark:via-[#141716] dark:to-blue-950/30 border border-teal-200/80 dark:border-teal-800/60 rounded-2xl p-8 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+        className="scroll-mt-24 bg-gradient-to-br from-teal-50/80 via-[#f2f5f3] to-blue-50/75 dark:from-teal-950/35 dark:via-[#141716] dark:to-blue-950/30 border border-teal-200/80 dark:border-teal-800/60 rounded-2xl p-5 sm:p-8 lg:p-10 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center"
       >
         <div className="lg:col-span-7 space-y-4">
           <span className="inline-block text-[11px] font-mono font-semibold uppercase tracking-wider text-teal-800 dark:text-teal-300">

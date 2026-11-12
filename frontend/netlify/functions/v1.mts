@@ -540,6 +540,10 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "no-referrer",
+      "permissions-policy": "camera=(), microphone=(), geolocation=()",
     },
   });
 }
@@ -548,16 +552,108 @@ function errorJson(requestId: string, code: string, message: string, status: num
   return jsonResponse({ request_id: requestId, code, message: message.slice(0, 240) }, status);
 }
 
+const JWT_ISSUER = "phenora-local-idp";
+const JWT_AUDIENCE = "phenora-backend";
+const DEFAULT_DEV_JWT_SECRET = "phenora-local-dev-secret-offline-airgap";
+
+function base64UrlDecode(segment: string): Buffer {
+  const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+  return Buffer.from(normalized + pad, "base64");
+}
+
+function getJwtSecret(): string {
+  try {
+    const netlifyEnv = (globalThis as { Netlify?: { env?: { get?: (k: string) => string | undefined } } }).Netlify?.env;
+    return netlifyEnv?.get?.("PHENORA_JWT_SECRET") || process.env.PHENORA_JWT_SECRET || DEFAULT_DEV_JWT_SECRET;
+  } catch {
+    return process.env.PHENORA_JWT_SECRET || DEFAULT_DEV_JWT_SECRET;
+  }
+}
+
+function verifyBearerJwt(token: string): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [headerB64, payloadB64, sigB64] = parts;
+  if (!headerB64 || !payloadB64 || !sigB64) return false;
+
+  try {
+    const header = JSON.parse(base64UrlDecode(headerB64).toString("utf-8")) as { alg?: unknown; typ?: unknown };
+    if (header.alg !== "HS256") return false;
+
+    const secret = getJwtSecret();
+    const expectedSig = crypto.createHmac("sha256", secret).update(`${headerB64}.${payloadB64}`).digest();
+    const providedSig = base64UrlDecode(sigB64);
+    if (expectedSig.length !== providedSig.length || !crypto.timingSafeEqual(expectedSig, providedSig)) {
+      return false;
+    }
+
+    const payload = JSON.parse(base64UrlDecode(payloadB64).toString("utf-8")) as {
+      sub?: unknown;
+      iss?: unknown;
+      aud?: unknown;
+      exp?: unknown;
+    };
+    if (typeof payload.sub !== "string" || payload.sub.length === 0) return false;
+    if (payload.iss !== JWT_ISSUER || payload.aud !== JWT_AUDIENCE) return false;
+    if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp <= nowSec) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function requireBearer(req: Request, requestId: string): Response | null {
   const auth = req.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ") || auth.slice(7).trim().length < 10) {
+  if (!auth.toLowerCase().startsWith("bearer ")) {
+    return errorJson(requestId, "unauthenticated", "Missing or invalid bearer authentication token", 401);
+  }
+  const token = auth.slice(7).trim();
+  if (!token || !verifyBearerJwt(token)) {
     return errorJson(requestId, "unauthenticated", "Missing or invalid bearer authentication token", 401);
   }
   return null;
 }
 
+const HPO_ID_RE = /^HP:[0-9]{7}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ALLOWED_POLARITIES = new Set(["present", "negated", "uncertain"]);
+const ALLOWED_TEMPORALITIES = new Set(["current", "historical", "onset", "unknown"]);
+const ALLOWED_EXPERIENCERS = new Set(["patient", "family_member", "unknown"]);
+const ALLOWED_REVIEW_STATUSES = new Set(["confirmed", "corrected", "manual"]);
+const ALLOWED_MATCH_REQ_KEYS = new Set(["observations", "candidate_limit"]);
+const ALLOWED_OBS_KEYS = new Set([
+  "observation_id",
+  "hpo_id",
+  "polarity",
+  "temporality",
+  "experiencer",
+  "onset_age_group",
+  "review_status",
+  "source_mention_ids",
+]);
+const ALLOWED_EXT_KEYS = new Set(["note_text", "language"]);
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+async function parseJsonObject(req: Request): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed: unknown = await req.json();
+    return isPlainObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async (req: Request, _context: Context) => {
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const rawReqId = req.headers.get("x-request-id") || "";
+  const requestId = UUID_RE.test(rawReqId.trim()) ? rawReqId.trim() : crypto.randomUUID();
   const url = new URL(req.url);
   const subPath = url.pathname.replace(/\/+$/, "");
 
@@ -581,17 +677,30 @@ export default async (req: Request, _context: Context) => {
     if (authErr) return authErr;
 
     if (req.method === "POST" && subPath === "/v1/documents/extract-text") {
+      const contentLength = Number(req.headers.get("content-length") || "0");
+      if (Number.isFinite(contentLength) && contentLength > MAX_UPLOAD_BYTES + 65536) {
+        return errorJson(requestId, "payload_too_large", "File size exceeds 25 MB limit", 413);
+      }
       const formData = await req.formData();
       const file = formData.get("file");
       if (!(file instanceof File)) {
         return errorJson(requestId, "invalid_request", "Missing clinical document upload.", 422);
       }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        return errorJson(requestId, "payload_too_large", "File size exceeds 25 MB limit", 413);
+      }
       const buf = new Uint8Array(await file.arrayBuffer());
-      if (buf.byteLength > 25 * 1024 * 1024) {
+      if (buf.byteLength > MAX_UPLOAD_BYTES) {
         return errorJson(requestId, "payload_too_large", "File size exceeds 25 MB limit", 413);
       }
       const mimeType = file.type || "application/octet-stream";
-      const name = file.name.toLowerCase();
+      const safeName = Array.from(path.basename(file.name || "upload"))
+        .filter((ch) => {
+          const code = ch.charCodeAt(0);
+          return code >= 32 && code !== 127;
+        })
+        .join("");
+      const name = safeName.toLowerCase();
       if (name.endsWith(".txt") || mimeType.startsWith("text/")) {
         const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
         return jsonResponse({
@@ -612,12 +721,19 @@ export default async (req: Request, _context: Context) => {
     }
 
     if (req.method === "POST" && subPath === "/v1/terms/search") {
-      const body = (await req.json()) as { query?: string; limit?: number };
+      const body = await parseJsonObject(req);
+      if (!body) {
+        return errorJson(requestId, "invalid_request", "Request body must be a valid JSON object.", 422);
+      }
       const query = typeof body.query === "string" ? body.query.trim() : "";
       if (query.length < 2 || query.length > 120) {
         return errorJson(requestId, "invalid_request", "Query must be between 2 and 120 characters.", 422);
       }
-      const limit = Math.min(20, Math.max(1, Number(body.limit ?? 10)));
+      const rawLimit = body.limit ?? 10;
+      if (typeof rawLimit !== "number" || !Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 20) {
+        return errorJson(requestId, "invalid_request", "limit must be an integer between 1 and 20.", 422);
+      }
+      const limit = rawLimit;
       const eng = getEngine();
       return jsonResponse({
         ontology_release: eng.manifest.ontology_release,
@@ -626,7 +742,10 @@ export default async (req: Request, _context: Context) => {
     }
 
     if (req.method === "POST" && subPath === "/v1/extractions") {
-      const body = (await req.json()) as { note_text?: string };
+      const body = await parseJsonObject(req);
+      if (!body || Object.keys(body).some((k) => !ALLOWED_EXT_KEYS.has(k))) {
+        return errorJson(requestId, "invalid_request", "Request validation failed. Ensure schema and constraints are satisfied.", 422);
+      }
       const noteText = typeof body.note_text === "string" ? body.note_text : "";
       if (!noteText.trim()) {
         return errorJson(requestId, "invalid_request", "note_text is required.", 422);
@@ -733,23 +852,57 @@ export default async (req: Request, _context: Context) => {
     }
 
     if (req.method === "POST" && subPath === "/v1/matches") {
-      const body = (await req.json()) as {
-        observations?: {
-          observation_id: string;
-          hpo_id: string;
-          polarity: string;
-          temporality: string;
-          experiencer: string;
-          onset_age_group: string;
-          review_status: string;
-        }[];
-        candidate_limit?: number;
-      };
-      const observations = Array.isArray(body.observations) ? body.observations : [];
-      if (observations.length === 0) {
-        return errorJson(requestId, "invalid_request", "At least one observation is required.", 422);
+      const parsedBody = await parseJsonObject(req);
+      if (!parsedBody || Object.keys(parsedBody).some((k) => !ALLOWED_MATCH_REQ_KEYS.has(k))) {
+        return errorJson(requestId, "invalid_request", "Request validation failed. Ensure schema and constraints are satisfied.", 422);
       }
-      const candidateLimit = Math.min(50, Math.max(1, Number(body.candidate_limit ?? 20)));
+      if (!Array.isArray(parsedBody.observations) || parsedBody.observations.length === 0 || parsedBody.observations.length > 300) {
+        return errorJson(requestId, "invalid_request", "observations must contain between 1 and 300 reviewed items.", 422);
+      }
+      const rawCandLimit = parsedBody.candidate_limit ?? 20;
+      if (typeof rawCandLimit !== "number" || !Number.isInteger(rawCandLimit) || rawCandLimit < 1 || rawCandLimit > 50) {
+        return errorJson(requestId, "invalid_request", "candidate_limit must be an integer between 1 and 50.", 422);
+      }
+      const observations: {
+        observation_id: string;
+        hpo_id: string;
+        polarity: string;
+        temporality: string;
+        experiencer: string;
+        onset_age_group: string;
+        review_status: string;
+      }[] = [];
+      for (const item of parsedBody.observations) {
+        if (!isPlainObject(item) || Object.keys(item).some((k) => !ALLOWED_OBS_KEYS.has(k))) {
+          return errorJson(requestId, "invalid_request", "Request validation failed. Extra or malformed observation fields are forbidden.", 422);
+        }
+        if (
+          typeof item.observation_id !== "string" ||
+          !UUID_RE.test(item.observation_id) ||
+          typeof item.hpo_id !== "string" ||
+          !HPO_ID_RE.test(item.hpo_id) ||
+          typeof item.polarity !== "string" ||
+          !ALLOWED_POLARITIES.has(item.polarity) ||
+          typeof item.temporality !== "string" ||
+          !ALLOWED_TEMPORALITIES.has(item.temporality) ||
+          typeof item.experiencer !== "string" ||
+          !ALLOWED_EXPERIENCERS.has(item.experiencer) ||
+          typeof item.review_status !== "string" ||
+          !ALLOWED_REVIEW_STATUSES.has(item.review_status)
+        ) {
+          return errorJson(requestId, "invalid_request", "Request validation failed. Invalid HPO ID or observation enum.", 422);
+        }
+        observations.push({
+          observation_id: item.observation_id,
+          hpo_id: item.hpo_id,
+          polarity: item.polarity,
+          temporality: item.temporality,
+          experiencer: item.experiencer,
+          onset_age_group: typeof item.onset_age_group === "string" ? item.onset_age_group : "unknown",
+          review_status: item.review_status,
+        });
+      }
+      const candidateLimit = rawCandLimit;
       const eng = getEngine();
 
       const dataVersion = {
@@ -1022,7 +1175,7 @@ export default async (req: Request, _context: Context) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal serverless error";
     console.error(`[v1.mts req=${requestId}]`, message);
-    return errorJson(requestId, "internal_error", message, 500);
+    return errorJson(requestId, "internal_error", "Internal serverless processing error.", 500);
   }
 };
 

@@ -61,7 +61,7 @@ export const CandidateList: React.FC<CandidateListProps> = ({
 
       <div
         ref={listContainerRef}
-        className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[280px]"
+        className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[240px] max-h-[320px] lg:max-h-[560px]"
       >
         {candidates.length === 0 ? (
           <div className="text-center py-10 text-xs text-[#66665f] dark:text-[#a1a196]">
@@ -92,31 +92,29 @@ export const CandidateList: React.FC<CandidateListProps> = ({
                     : "bg-[#fcfcfb] border-[#e5e5e0] hover:bg-white hover:border-teal-600/60 dark:bg-[#1a1a18] dark:border-[#2e2e2a] dark:hover:bg-[#22221f] dark:hover:border-teal-400/60"
                 }`}
               >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono font-bold tabular-nums shrink-0 ${rankBadgeClass}`}
-                    >
-                      #{c.rank}
-                    </span>
-                    <span className="text-xs font-semibold truncate text-[#111] dark:text-[#f3f3ee]">
-                      {c.disease_label}
-                    </span>
-                  </div>
+                <div className="flex items-start gap-2 mb-1.5 min-w-0">
+                  <span
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono font-bold tabular-nums shrink-0 mt-0.5 ${rankBadgeClass}`}
+                  >
+                    #{c.rank}
+                  </span>
+                  <span className="text-xs font-semibold leading-snug line-clamp-2 text-[#111] dark:text-[#f3f3ee] min-w-0">
+                    {c.disease_label}
+                  </span>
+                </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    {c.icd11_code && (
-                      <span
-                        title={c.icd11_title ? `WHO ICD-11: ${c.icd11_title}` : "WHO ICD-11 classification"}
-                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800"
-                      >
-                        ICD-11 {c.icd11_code}
-                      </span>
-                    )}
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200/80 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800">
-                      {c.disease_id}
+                <div className="flex flex-wrap items-center gap-1 pl-7 mb-2">
+                  {c.icd11_code && (
+                    <span
+                      title={c.icd11_title ? `WHO ICD-11: ${c.icd11_title}` : "WHO ICD-11 classification"}
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800"
+                    >
+                      ICD-11 {c.icd11_code}
                     </span>
-                  </div>
+                  )}
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200/80 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800">
+                    {c.disease_id}
+                  </span>
                 </div>
 
                 {/* Similarity bar */}

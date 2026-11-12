@@ -211,3 +211,122 @@ def test_zero_network_egress():
         # 3. Validate models
         req = ExtractionRequest(note_text="Testing zero network egress.")
         assert req.language == "en"
+
+
+# -------------------------------------------------------------------------
+# 4. HTTP BOUNDARY, SECURITY HEADERS, UPLOAD CAPS & ERROR SANITIZATION TESTS
+# -------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_security_headers_and_malformed_request_id_resilience():
+    """Verify security headers on responses and safe handling of non-UUID X-Request-ID."""
+    from httpx import ASGITransport, AsyncClient
+    from backend.app.main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(
+            "/v1/health",
+            headers={"X-Request-ID": "not-a-uuid\r\nInjected-Header: evil"},
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+        assert resp.headers.get("X-Frame-Options") == "DENY"
+        assert resp.headers.get("Referrer-Policy") == "no-referrer"
+        assert resp.headers.get("Permissions-Policy") == "camera=(), microphone=(), geolocation=()"
+        assert resp.headers.get("Cache-Control") == "no-store"
+        # Returned X-Request-ID must be a valid canonical UUID
+        uuid.UUID(resp.headers["X-Request-ID"])
+
+        # Trigger HTTPException (401) & RequestValidationError (422) with non-UUID header
+        unauth = await ac.post(
+            "/v1/terms/search",
+            json={"query": "seizure"},
+            headers={"X-Request-ID": "bad-id"},
+        )
+        assert unauth.status_code == 401
+        assert unauth.json()["code"] == "unauthenticated"
+        uuid.UUID(unauth.json()["request_id"])
+
+        token = create_token(actor_id="sec-tester", role="clinician")
+        bad_schema = await ac.post(
+            "/v1/terms/search",
+            json={"query": "a"},
+            headers={"Authorization": f"Bearer {token}", "X-Request-ID": "bad-id"},
+        )
+        assert bad_schema.status_code == 422
+        assert bad_schema.json()["code"] == "invalid_request"
+        uuid.UUID(bad_schema.json()["request_id"])
+
+
+@pytest.mark.anyio
+async def test_model_exception_handlers_sanitize_internal_urls():
+    """Model unavailable/timeout errors must never expose internal base_url or traceback details."""
+    from httpx import ASGITransport, AsyncClient
+    from backend.app.extractor.base import ModelTimeoutException, ModelUnavailableException
+    from backend.app.main import app
+
+    token = create_token(actor_id="sec-tester", role="clinician")
+    headers = {"Authorization": f"Bearer {token}", "X-Request-ID": "invalid-req-id"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        with patch(
+            "backend.app.extractor.service.ExtractionService.extract_phenotypes",
+            side_effect=ModelUnavailableException("Ollama unreachable at http://127.0.0.1:11434/internal: secret"),
+        ):
+            r503 = await ac.post("/v1/extractions", json={"note_text": "Seizure"}, headers=headers)
+            assert r503.status_code == 503
+            body503 = r503.json()
+            assert body503["code"] == "model_unavailable"
+            assert "11434" not in body503["message"]
+            assert "http://" not in body503["message"]
+
+        with patch(
+            "backend.app.extractor.service.ExtractionService.extract_phenotypes",
+            side_effect=ModelTimeoutException("LM Studio timed out at http://10.0.0.5:1234"),
+        ):
+            r504 = await ac.post("/v1/extractions", json={"note_text": "Seizure"}, headers=headers)
+            assert r504.status_code == 504
+            body504 = r504.json()
+            assert body504["code"] == "model_timeout"
+            assert "1234" not in body504["message"]
+            assert "10.0.0.5" not in body504["message"]
+
+
+@pytest.mark.anyio
+async def test_upload_limit_sanitized_filename_and_sql_like_escaping():
+    """Verify streaming 25MB cap, sanitized warning filename, and LIKE wildcard escaping."""
+    from httpx import ASGITransport, AsyncClient
+    from backend.app.main import MAX_UPLOAD_BYTES, app
+
+    token = create_token(actor_id="sec-tester", role="clinician")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 1. Oversized upload (> 25 MB) must be rejected with 413
+        oversized = b"A" * (MAX_UPLOAD_BYTES + 1024)
+        r413 = await ac.post(
+            "/v1/documents/extract-text",
+            files={"file": ("huge.txt", oversized, "text/plain")},
+            headers=headers,
+        )
+        assert r413.status_code == 413
+        assert r413.json()["code"] == "payload_too_large"
+
+        # 2. Traversal + control chars stripped in image warning filename
+        r_img = await ac.post(
+            "/v1/documents/extract-text",
+            files={"file": ("../../evil\x07file.png", b"\x89PNG\r\n", "image/png")},
+            headers=headers,
+        )
+        assert r_img.status_code == 200
+        warnings = r_img.json()["warnings"]
+        assert warnings and ".." not in warnings[0] and "\x07" not in warnings[0]
+
+        # 3. SQL LIKE wildcards in term search must be treated as literals
+        r_like = await ac.post(
+            "/v1/terms/search",
+            json={"query": "%%%", "limit": 10},
+            headers=headers,
+        )
+        assert r_like.status_code == 200
+        assert r_like.json()["results"] == []

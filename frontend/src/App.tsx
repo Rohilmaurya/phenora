@@ -414,7 +414,7 @@ export function App() {
               className="absolute inset-0 w-full h-full pointer-events-none z-1"
             />
 
-            <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 py-8 sm:pb-24 max-w-4xl mx-auto pointer-events-auto">
+            <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 sm:px-6 py-8 sm:pb-24 max-w-4xl mx-auto pointer-events-auto">
               <div role="heading" aria-level={1} className="mb-3.5">
                 <span className="block text-3xl sm:text-4xl lg:text-5xl font-medium tracking-[-0.025em] leading-[1.1] text-[#6d6d65] dark:text-[#a1a196]">
                   Clinical notes traced to
@@ -489,8 +489,8 @@ export function App() {
           />
         </div>
       ) : (
-        <div className="flex-1 flex flex-col bg-[#f7f7f5] dark:bg-[#0c0c0b]">
-          <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex flex-col gap-7">
+        <div className="flex-1 flex flex-col bg-[#f7f7f5] dark:bg-[#0c0c0b] min-w-0">
+          <main className="max-w-7xl w-full min-w-0 mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-6 md:py-8 flex flex-col gap-6 sm:gap-7">
             {/* Calm horizontal 3-step progression nav (progressive disclosure) */}
             <nav
               aria-label="Clinical workflow steps"
@@ -581,8 +581,8 @@ export function App() {
             )}
 
             {workbenchStep === "review" && (
-              <div className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
-                <aside className="lg:col-span-4 surface-card p-5 flex flex-col gap-4 lg:sticky lg:top-20">
+              <div className="max-w-6xl mx-auto w-full min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-start">
+                <aside className="lg:col-span-4 min-w-0 surface-card p-4 sm:p-5 flex flex-col gap-4 lg:sticky lg:top-20">
                   <div className="flex items-center justify-between gap-2 pb-3 border-b border-[#e5e5e0] dark:border-[#2a2a26]">
                     <div>
                       <span className="block text-[11px] font-mono uppercase tracking-[0.08em] text-[#77776f] dark:text-[#9c9c92]">
@@ -607,7 +607,7 @@ export function App() {
                   </p>
                 </aside>
 
-                <div className="lg:col-span-8">
+                <div className="lg:col-span-8 min-w-0">
                   <MentionReviewer
                     mentions={mentions}
                     reviewedObservations={reviewedObservations}
@@ -653,8 +653,8 @@ export function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-stretch">
-                  <div className="lg:col-span-4">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-stretch">
+                  <div className="lg:col-span-4 min-w-0">
                     <CandidateList
                       candidates={matchResponse?.candidates || []}
                       selectedCandidateId={selectedCandidateId}
@@ -662,7 +662,7 @@ export function App() {
                     />
                   </div>
 
-                  <div className="lg:col-span-8 min-h-[600px]">
+                  <div className="lg:col-span-8 min-w-0 min-h-[420px] sm:min-h-[520px] lg:min-h-[600px]">
                     <EvidenceGraphView
                       graph={matchResponse?.graph || { nodes: [], edges: [] }}
                       selectedCandidate={selectedCandidate}
@@ -696,7 +696,7 @@ export function App() {
         <div
           role="status"
           aria-live="polite"
-          className="modal-enter fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-lg border shadow-lg backdrop-blur-md text-xs font-mono bg-[#111] text-white border-[#2e2e2a] dark:bg-[#1e1e1b] dark:text-[#f3f3ee] dark:border-[#3c3c34]"
+          className="modal-enter fixed bottom-3 inset-x-3 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:max-w-sm z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-lg border shadow-lg backdrop-blur-md text-xs font-mono bg-[#111] text-white border-[#2e2e2a] dark:bg-[#1e1e1b] dark:text-[#f3f3ee] dark:border-[#3c3c34]"
         >
           {toast.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
           {toast.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}

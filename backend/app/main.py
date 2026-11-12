@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -119,9 +120,17 @@ app.add_middleware(
 # -------------------------------------------------------------------------
 # MIDDLEWARE: ZERO PERSISTENCE, NO-STORE, NON-PHI AUDIT
 # -------------------------------------------------------------------------
+def _sanitize_request_id(raw: Optional[str]) -> str:
+    candidate = (raw or "").strip()
+    try:
+        return str(uuid.UUID(candidate))
+    except ValueError:
+        return str(uuid.uuid4())
+
+
 @app.middleware("http")
 async def security_and_audit_middleware(request: Request, call_next):
-    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
     start_time = time.time()
 
     # Process request
@@ -130,6 +139,10 @@ async def security_and_audit_middleware(request: Request, call_next):
     duration_ms = round((time.time() - start_time) * 1000, 2)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Request-ID"] = req_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
     # Non-PHI audit logging (NEVER logs query parameters, body text, or patient quotes)
     repo = get_repository()
@@ -147,7 +160,7 @@ async def security_and_audit_middleware(request: Request, call_next):
 # -------------------------------------------------------------------------
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
     code = ErrorCode.internal_error
     msg = str(exc.detail)
 
@@ -173,7 +186,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
     # Format message without reflecting back sensitive note content
     err = ErrorResponse(
         request_id=uuid.UUID(req_id),
@@ -189,11 +202,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(ModelUnavailableException)
 async def model_unavailable_handler(request: Request, exc: ModelUnavailableException):
-    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
+    logger.warning("[MODEL_UNAVAILABLE] req_id=%s detail=%s", req_id, str(exc)[:240])
     err = ErrorResponse(
         request_id=uuid.UUID(req_id),
         code=ErrorCode.model_unavailable,
-        message=str(exc)[:240],
+        message="Local phenotype extraction model is currently unavailable.",
     )
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -204,11 +218,12 @@ async def model_unavailable_handler(request: Request, exc: ModelUnavailableExcep
 
 @app.exception_handler(ModelTimeoutException)
 async def model_timeout_handler(request: Request, exc: ModelTimeoutException):
-    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_id = _sanitize_request_id(request.headers.get("X-Request-ID"))
+    logger.warning("[MODEL_TIMEOUT] req_id=%s detail=%s", req_id, str(exc)[:240])
     err = ErrorResponse(
         request_id=uuid.UUID(req_id),
         code=ErrorCode.model_timeout,
-        message=str(exc)[:240],
+        message="Local phenotype extraction model request timed out.",
     )
     return JSONResponse(
         status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -260,6 +275,10 @@ def get_health(repo: AnnotationRepository = Depends(get_repository)):
     )
 
 
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_PDF_PAGES = 100
+
+
 @app.post(
     "/v1/documents/extract-text",
     response_model=DocumentExtractResponse,
@@ -276,15 +295,21 @@ async def extract_document_text(
     principal: AuthenticatedPrincipal = Depends(require_auth),
 ):
     """Extracts text from uploaded clinical documents (PDF, TXT, images) in volatile RAM."""
-    contents = await file.read()
-    if len(contents) > 25 * 1024 * 1024:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail={"code": "payload_too_large", "message": "File size exceeds 25 MB limit"},
-        )
+    chunks = []
+    total_bytes = 0
+    while chunk := await file.read(1024 * 1024):
+        total_bytes += len(chunk)
+        if total_bytes > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail={"code": "payload_too_large", "message": "File size exceeds 25 MB limit"},
+            )
+        chunks.append(chunk)
+    contents = b"".join(chunks)
 
     mime_type = file.content_type or "application/octet-stream"
-    filename = (file.filename or "").lower()
+    safe_basename = re.sub(r"[\x00-\x1f\x7f]", "", os.path.basename(file.filename or "upload"))[:120]
+    filename = safe_basename.lower()
     extracted_text = ""
     page_count = 1
     warnings = []
@@ -297,10 +322,12 @@ async def extract_document_text(
             reader = pypdf.PdfReader(io.BytesIO(contents))
             page_count = len(reader.pages)
             pages_text = []
-            for page in reader.pages:
+            for page in reader.pages[:MAX_PDF_PAGES]:
                 text = page.extract_text() or ""
                 if text.strip():
                     pages_text.append(text.strip())
+            if page_count > MAX_PDF_PAGES:
+                warnings.append(f"PDF truncated to first {MAX_PDF_PAGES} pages for safe in-memory processing.")
             extracted_text = "\n\n".join(pages_text)
             if not extracted_text:
                 method = "local_ocr"
@@ -312,7 +339,7 @@ async def extract_document_text(
             method = "native_pdf_stream"
         else:
             method = "local_ocr"
-            warnings.append(f"Image document ({filename}) parsed in air-gapped mode.")
+            warnings.append(f"Image document ({safe_basename or 'attachment'}) parsed in air-gapped mode.")
             extracted_text = contents.decode("utf-8", errors="ignore") or "Clinical image attachment."
 
         return DocumentExtractResponse(
@@ -322,10 +349,10 @@ async def extract_document_text(
             extraction_method=method,
             warnings=warnings,
         )
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "invalid_request", "message": f"Could not parse document: {str(exc)[:200]}"},
+            detail={"code": "invalid_request", "message": "Could not parse uploaded document."},
         )
 
 
@@ -384,8 +411,7 @@ def extract_phenotypes(
             detail={"code": "payload_too_large", "message": "Note exceeds maximum limit of 50000 characters"},
         )
 
-    req_id_str = req.headers.get("X-Request-ID") or str(uuid.uuid4())
-    req_id = uuid.UUID(req_id_str)
+    req_id = uuid.UUID(_sanitize_request_id(req.headers.get("X-Request-ID")))
 
     return service.extract_phenotypes(request, request_id=req_id)
 
@@ -407,8 +433,7 @@ def match_phenotypes(
     matcher: DeterministicMatcher = Depends(get_matcher),
 ):
     """Ranks curated disease-phenotype evidence for reviewed observations."""
-    req_id_str = req.headers.get("X-Request-ID") or str(uuid.uuid4())
-    req_id = uuid.UUID(req_id_str)
+    req_id = uuid.UUID(_sanitize_request_id(req.headers.get("X-Request-ID")))
 
     return matcher.match(request, request_id=req_id)
 

@@ -83,8 +83,8 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
       />
 
       {/* Card Header: Disease Identity + Pin & Close */}
-      <div className="px-5 pt-4 pb-3.5 border-b border-[#ecece6] dark:border-[#262622] shrink-0">
-        <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="px-4 sm:px-5 pt-3.5 sm:pt-4 pb-3 sm:pb-3.5 border-b border-[#ecece6] dark:border-[#262622] shrink-0">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 tabular-nums">
               Rank #{selectedCandidate.rank}
@@ -152,14 +152,14 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
         <div
           role="tablist"
           aria-label="Disease explanation views"
-          className="mt-3 flex items-center p-1 bg-[#f4f4f0] dark:bg-[#1e1e1b] rounded-lg gap-1 text-[11px] font-medium"
+          className="mt-3 flex flex-wrap sm:flex-nowrap items-center p-1 bg-[#f4f4f0] dark:bg-[#1e1e1b] rounded-lg gap-1 text-[10.5px] sm:text-[11px] font-medium"
         >
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === "medical"}
             onClick={() => setActiveTab("medical")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer ${
+            className={`flex-1 min-w-[84px] flex items-center justify-center gap-1.5 py-1.5 px-1.5 sm:px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer ${
               activeTab === "medical"
                 ? "bg-white text-[#111] font-semibold shadow-2xs dark:bg-[#2a2a26] dark:text-[#f3f3ee]"
                 : "text-[#55554f] hover:text-[#111] dark:text-[#a1a196] dark:hover:text-[#f3f3ee]"
@@ -174,7 +174,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
             role="tab"
             aria-selected={activeTab === "plain"}
             onClick={() => setActiveTab("plain")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer ${
+            className={`flex-1 min-w-[96px] flex items-center justify-center gap-1.5 py-1.5 px-1.5 sm:px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer ${
               activeTab === "plain"
                 ? "bg-white text-[#111] font-semibold shadow-2xs dark:bg-[#2a2a26] dark:text-[#f3f3ee]"
                 : "text-[#55554f] hover:text-[#111] dark:text-[#a1a196] dark:hover:text-[#f3f3ee]"
@@ -189,7 +189,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
             role="tab"
             aria-selected={activeTab === "evidence"}
             onClick={() => setActiveTab("evidence")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer tabular-nums ${
+            className={`flex-1 min-w-[88px] flex items-center justify-center gap-1.5 py-1.5 px-1.5 sm:px-2 rounded-md whitespace-nowrap transition-colors duration-150 cursor-pointer tabular-nums ${
               activeTab === "evidence"
                 ? "bg-white text-[#111] font-semibold shadow-2xs dark:bg-[#2a2a26] dark:text-[#f3f3ee]"
                 : "text-[#55554f] hover:text-[#111] dark:text-[#a1a196] dark:hover:text-[#f3f3ee]"
@@ -202,7 +202,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
       </div>
 
       {/* Borderless Editorial Inspector Body */}
-      <div className="px-5 py-4 flex-1 min-h-0 overflow-y-auto space-y-4">
+      <div className="px-4 sm:px-5 py-3.5 sm:py-4 flex-1 min-h-0 overflow-y-auto space-y-4">
         <div ref={tabContentRef}>
           {activeTab === "medical" && explanation && (
             <div className="divide-y divide-[#ecece6] dark:divide-[#262622]">
@@ -305,7 +305,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
                   </div>
 
                   {obs.ontology_paths && obs.ontology_paths.length > 0 && (
-                    <div className="text-[11px] font-mono text-[#55554f] dark:text-[#b2b2a7]">
+                    <div className="text-[11px] font-mono text-[#55554f] dark:text-[#b2b2a7] break-words">
                       <span className="text-[#88887f]">Path: </span>
                       {obs.ontology_paths[0]?.join(" -> ") || "Direct match"}
                     </div>

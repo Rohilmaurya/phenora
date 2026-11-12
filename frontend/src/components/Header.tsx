@@ -33,8 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   const isDark = theme === "dark";
 
   return (
-    <header className="border-b border-[#e5e5e0]/80 dark:border-[#242420] bg-[#f7f7f5]/90 dark:bg-[#0c0c0b]/90 backdrop-blur-md sticky top-0 z-50 px-4 sm:px-6 py-2.5 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="border-b border-[#e5e5e0]/80 dark:border-[#242420] bg-[#f7f7f5]/90 dark:bg-[#0c0c0b]/90 backdrop-blur-md sticky top-0 z-50 px-3 sm:px-6 py-2.5 transition-colors">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4 min-w-0">
         <button
           type="button"
           onClick={() => onSwitchView("landing")}
@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </button>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {!isReady && healthError && (
             <button
               type="button"

@@ -162,14 +162,14 @@ export const MentionReviewer: React.FC<MentionReviewerProps> = ({
                     title="Click to remap HPO term"
                     aria-label={`Change HPO term for ${m.source_span.quote}`}
                   >
-                    <span className="font-medium truncate max-w-[170px] sm:max-w-[220px]">{hpoLabel}</span>
+                    <span className="font-medium truncate max-w-[140px] sm:max-w-[220px]">{hpoLabel}</span>
                     <span className="text-[10px] text-blue-600 dark:text-blue-400">{hpoId}</span>
                     <Search className="w-2.5 h-2.5 opacity-70" />
                   </button>
                 </div>
 
                 {/* Airy inline controls with >= 8px touch gap */}
-                <div className="flex items-center flex-wrap gap-2 text-[11px] font-mono pl-6.5">
+                <div className="flex items-center flex-wrap gap-2 text-[11px] font-mono pl-0 sm:pl-6.5">
                   {(["present", "negated", "uncertain"] as Polarity[]).map((p) => {
                     const selected = polarity === p;
                     return (

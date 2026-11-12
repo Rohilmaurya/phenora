@@ -129,6 +129,9 @@ export const DotMatrixHandsCanvas: React.FC<{
     }
 
     window.addEventListener("resize", resize);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resize()) : null;
+    resizeObserver?.observe(canvas);
     resize();
 
     function drawHandIntoField(
@@ -284,9 +287,10 @@ export const DotMatrixHandsCanvas: React.FC<{
 
     return () => {
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
       cancelAnimationFrame(animId);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className={className} />;
+  return <canvas ref={canvasRef} className={`max-w-full ${className}`.trim()} />;
 };

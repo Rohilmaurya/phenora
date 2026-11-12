@@ -69,7 +69,7 @@ export const HpoSearchModal: React.FC<HpoSearchModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-xs p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-xs p-3 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -78,7 +78,7 @@ export const HpoSearchModal: React.FC<HpoSearchModalProps> = ({
       aria-label={title}
     >
       <div className="modal-enter bg-white dark:bg-[#151513] border border-[#e5e5e0] dark:border-[#2e2e2a] rounded-2xl max-w-xl w-full flex flex-col max-h-[85vh] shadow-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#e5e5e0] dark:border-[#2e2e2a] flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[#e5e5e0] dark:border-[#2e2e2a] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-[#111] dark:text-[#f3f3ee]" />
             <h3 className="text-sm font-semibold text-[#111] dark:text-[#f3f3ee]">{title}</h3>

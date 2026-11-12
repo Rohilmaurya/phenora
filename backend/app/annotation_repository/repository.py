@@ -203,17 +203,18 @@ class AnnotationRepository:
         cur.execute("SELECT hpo_id, synonym FROM hpo_synonym WHERE LOWER(synonym) = ?", (q,))
         exact_synonyms = cur.fetchall()
 
-        # Query prefix and substring
+        # Query prefix and substring (escape SQL LIKE wildcards so input cannot widen scans)
+        escaped_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         cur.execute("""
             SELECT hpo_id, label FROM hpo_term 
-            WHERE LOWER(label) LIKE ? AND obsolete = 0 LIMIT ?
-        """, (f"%{q}%", limit * 2))
+            WHERE LOWER(label) LIKE ? ESCAPE '\\' AND obsolete = 0 LIMIT ?
+        """, (f"%{escaped_q}%", limit * 2))
         sub_labels = cur.fetchall()
 
         cur.execute("""
             SELECT hpo_id, synonym FROM hpo_synonym 
-            WHERE LOWER(synonym) LIKE ? LIMIT ?
-        """, (f"%{q}%", limit * 2))
+            WHERE LOWER(synonym) LIKE ? ESCAPE '\\' LIMIT ?
+        """, (f"%{escaped_q}%", limit * 2))
         sub_synonyms = cur.fetchall()
         conn.close()
 

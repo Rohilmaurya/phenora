@@ -1079,7 +1079,7 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
   const fitGraphFraming = useCallback(
     (duration = 420) => {
       if (!filteredGraph.diseaseNode || !targetLayout) return;
-      const cardOpenDesktop = showInspectorCardRef.current && canvasSize.width >= 680;
+      const cardOpenDesktop = showInspectorCardRef.current && canvasSize.width >= 760;
       const rightReserve = cardOpenDesktop ? 420 : 0;
       const effAvailW = Math.max(200, canvasSize.width - canvasPad * 2 - rightReserve);
       const effAvailH = Math.max(160, canvasSize.height - canvasPad * 2);
@@ -1880,7 +1880,7 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
         ref={canvasWrapRef}
         onMouseMove={handleCanvasMouseMove}
         onMouseLeave={handleCanvasMouseLeave}
-        className="flex-1 w-full min-h-[540px] rounded-xl border border-[#e5e5e0] dark:border-[#2e2e2a] bg-[#fafaf8] dark:bg-[#111110] overflow-hidden relative"
+        className="flex-1 w-full min-h-[360px] sm:min-h-[460px] lg:min-h-[540px] rounded-xl border border-[#e5e5e0] dark:border-[#2e2e2a] bg-[#fafaf8] dark:bg-[#111110] overflow-hidden relative"
       >
         {isMatching ? (
           <div
@@ -1938,7 +1938,7 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
               attributionPosition="bottom-left"
             >
               <Background color={isDark ? "#2a2a25" : "#dcdcd6"} gap={20} size={1} />
-              {!showInspectorCard && (
+              {!showInspectorCard && canvasSize.width >= 600 && (
                 <MiniMap
                   pannable
                   zoomable
@@ -1959,15 +1959,16 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCardPinned(true)}
-                className="hidden sm:inline-flex items-center gap-2 absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full bg-white/95 dark:bg-[#1a1a18]/95 border border-teal-200 dark:border-teal-800 shadow-xs text-[11px] font-mono text-teal-800 dark:text-teal-300 hover:border-teal-600 dark:hover:border-teal-400 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 sm:gap-2 absolute top-3 right-3 z-20 px-2.5 sm:px-3 py-1.5 rounded-full bg-white/95 dark:bg-[#1a1a18]/95 border border-teal-200 dark:border-teal-800 shadow-xs text-[11px] font-mono text-teal-800 dark:text-teal-300 hover:border-teal-600 dark:hover:border-teal-400 transition-colors cursor-pointer"
               >
-                <span className="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400" />
-                <span>Hover or click disease block to inspect</span>
+                <span className="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0" />
+                <span className="sm:hidden">Tap to inspect</span>
+                <span className="hidden sm:inline">Hover or click disease block to inspect</span>
               </button>
             )}
 
-            {/* Floating Editorial Summary Card (positioned cleanly in cleared right space) */}
-            {showInspectorCard && selectedCandidate && (
+            {/* Floating Editorial Summary Card on wide canvases (docked cleanly below on narrow widths) */}
+            {showInspectorCard && selectedCandidate && canvasSize.width >= 760 && (
               <div className="absolute top-5 right-5 bottom-5 w-[min(392px,calc(100%-2.5rem))] z-30 pointer-events-none flex items-center justify-end">
                 <div
                   onMouseEnter={handleCardHoverStart}
@@ -1991,6 +1992,23 @@ const EvidenceGraphCanvas: React.FC<EvidenceGraphViewProps> = ({
           </>
         )}
       </div>
+
+      {/* Docked Editorial Summary Card on compact/mobile/tablet canvases so nodes remain unoccluded */}
+      {showInspectorCard && selectedCandidate && canvasSize.width < 760 && (
+        <div className="mt-3 w-full max-h-[460px] flex flex-col">
+          <EvidenceInspector
+            selectedCandidate={selectedCandidate}
+            excludedObservations={excludedObservations}
+            isPinned={isCardPinned}
+            onTogglePin={() => setIsCardPinned((prev) => !prev)}
+            onClose={() => {
+              setIsCardPinned(false);
+              setIsDiseaseHovered(false);
+              setIsCardHovered(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };
