@@ -1,0 +1,17 @@
+"$schema" = "https://open-api.netlify.com/netlify.schema.json"
+
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+  environment = { NODE_VERSION = "20" }
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["netlify/data/phenora_who_pack.json.gz"]
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
