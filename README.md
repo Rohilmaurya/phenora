@@ -89,11 +89,3 @@ python scripts/verify_airgap.py
 npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
-
-## Documentation
-
-- [PRD.md](./PRD.md) — Product requirements & clinical safety boundaries
-- [TRD.md](./TRD.md) — Technical requirements & determinism guarantees
-- [ARCHITECTURE_REVIEW.md](./ARCHITECTURE_REVIEW.md) — Ontology matching & system architecture
-- [APP_FLOW.md](./APP_FLOW.md) & [FRONTEND_SPEC.md](./FRONTEND_SPEC.md) — UI flows & visual specifications
-- [PROJECT_PHASES.md](./PROJECT_PHASES.md) — Delivery milestones

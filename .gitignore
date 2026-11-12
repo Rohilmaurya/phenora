@@ -38,3 +38,11 @@ step3_*.png
 reverted_hands_*.png
 kindred.html
 editorial_deck.html
+
+# Internal planning & architecture specification docs (kept locally only)
+PRD.md
+TRD.md
+ARCHITECTURE_REVIEW.md
+APP_FLOW.md
+FRONTEND_SPEC.md
+PROJECT_PHASES.md
